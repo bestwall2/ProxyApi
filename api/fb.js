@@ -1,13 +1,29 @@
-export const config = { runtime: "edge" };
+export default async function handler(req, res) {
+  try {
+    const p = req.query.p || "";
+    const qs = new URLSearchParams(req.query);
+    qs.delete("p");
+    const query = qs.toString();
+    const target =
+      "https://graph.facebook.com/" + p + (query ? "?" + query : "");
 
-export default async function handler(req) {
-  const u = new URL(req.url);
-  const path = u.searchParams.get("p") || "";
-  u.searchParams.delete("p");
-  const target = "https://graph.facebook.com/" + path + (u.search || "");
-  const init = { method: req.method, headers: {} };
-  const ct = req.headers.get("content-type");
-  if (ct) init.headers["content-type"] = ct;
-  if (req.method !== "GET" && req.method !== "HEAD") init.body = await req.text();
-  return fetch(target, init);
+    const init = { method: req.method, headers: {} };
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      init.headers["content-type"] =
+        req.headers["content-type"] || "application/x-www-form-urlencoded";
+      init.body =
+        typeof req.body === "string"
+          ? req.body
+          : new URLSearchParams(req.body || {}).toString();
+    }
+
+    const r = await fetch(target, init);
+    const text = await r.text();
+    res
+      .status(r.status)
+      .setHeader("content-type", r.headers.get("content-type") || "application/json")
+      .send(text);
+  } catch (e) {
+    res.status(502).json({ relay_error: String(e) });
+  }
 }
